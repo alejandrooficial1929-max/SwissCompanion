@@ -345,8 +345,24 @@ function generateQR() {
     container.style.display = "block";
     reader.style.display = "none";
     
-    // Compactar la información de resultados
-    const dataString = JSON.stringify(pairings.map(p => `${p.board}:${p.result}:${p.illegalW}:${p.illegalB}`));
+    // Comprimimos TODOS los datos en arrays simples para enviar la mesa completa
+    const compressedPairings = pairings.map(p => [
+        p.board, 
+        p.snoW || 0, 
+        p.snoB || 0, 
+        p.white, 
+        p.black, 
+        p.result || "", 
+        p.illegalW || 0, 
+        p.illegalB || 0
+    ]);
+
+    const dataToEncode = {
+        r: currentRound,
+        p: compressedPairings
+    };
+
+    const dataString = JSON.stringify(dataToEncode);
     
     new QRCode(container, {
         text: dataString,
@@ -370,21 +386,41 @@ function startQRScanner() {
     html5QrcodeScanner = new Html5QrcodeScanner("qrReader", { fps: 10, qrbox: 250 });
     html5QrcodeScanner.render((decodedText) => {
         try {
-            const parsedData = JSON.parse(decodedText);
-            parsedData.forEach(item => {
-                const [board, result, illegalW, illegalB] = item.split(":");
-                const p = pairings.find(x => x.board === parseInt(board));
-                if (p) {
-                    p.result = result;
-                    p.illegalW = parseInt(illegalW);
-                    p.illegalB = parseInt(illegalB);
-                }
-            });
-            alert("¡Datos sincronizados correctamente!");
-            closeQRModal();
+            const data = JSON.parse(decodedText);
+            
+            // Verificamos si vienen en el nuevo formato comprimido (con la propiedad "p")
+            if (data.p) {
+                currentRound = data.r || 1;
+                // Reconstruimos el objeto completo para que la app lo entienda
+                pairings = data.p.map(arr => ({
+                    board: arr[0],
+                    snoW: arr[1],
+                    snoB: arr[2],
+                    white: arr[3],
+                    black: arr[4],
+                    result: arr[5],
+                    illegalW: arr[6],
+                    illegalB: arr[7],
+                    timeStart: new Date().toLocaleTimeString(), // Reiniciamos los tiempos
+                    timeEnd: null
+                }));
+            }
+
+            // Actualizamos la interfaz y enviamos a la nube si hay internet
+            document.getElementById("roundSelect").value = currentRound;
             renderPairings();
-        } catch (e) {
-            alert("Error al procesar el código QR.");
+            syncToCloud();
+            
+            alert("¡Datos sincronizados correctamente desde el QR!");
+            
+            // Cierra el modal del escáner
+            document.getElementById("modalQR").classList.add("hidden");
+            if (html5QrcodeScanner) {
+                html5QrcodeScanner.clear();
+            }
+        } catch (error) {
+            console.error("Error al leer QR", error);
+            alert("Código QR no válido o corrupto.");
         }
     });
 }
