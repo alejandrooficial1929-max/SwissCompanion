@@ -287,30 +287,35 @@ function importSwissManagerFile(e) {
         if (lines[0].includes(';')) delimiter = ';';
         else if (lines[0].includes('\t')) delimiter = '\t';
 
-        let isParsing = false; // Bandera para saber si ya estamos dentro de la tabla
+        let isParsing = false; 
+        let colW = 3; // Por defecto columna D
+        let colB = 8; // Por defecto columna I
+
+        // ¡NUEVA LÓGICA INTELIGENTE! Buscar dinámicamente en qué columnas están los Nombres
+        for (let i = 0; i < lines.length; i++) {
+            const headerCols = lines[i].split(delimiter).map(c => c.trim().toLowerCase());
+            if (headerCols.includes("nombre")) {
+                colW = headerCols.indexOf("nombre");
+                colB = headerCols.lastIndexOf("nombre");
+                break; // Ya encontramos las columnas correctas
+            }
+        }
 
         for (let i = 0; i < lines.length; i++) {
             const line = lines[i].trim();
-            
-            // Verificamos si es una fila vacía (limpiando los delimitadores)
             const emptyCheck = line.replace(new RegExp(delimiter, 'g'), '');
             
-            // Si ya estábamos leyendo jugadores y nos topamos con una fila vacía, terminamos la lectura
-            if (isParsing && emptyCheck === "") {
-                break;
-            }
+            if (isParsing && emptyCheck === "") break;
 
             const cols = line.split(delimiter).map(c => c.trim());
             const boardNum = parseInt(cols[0]);
             
-            // Si la columna A (índice 0) es un número de mesa válido, la leemos
             if (!isNaN(boardNum) && boardNum > 0) {
-                isParsing = true; // Empezamos a leer la tabla
+                isParsing = true; 
                 
-                // Forzamos la lectura estricta: Columna D (índice 3) y Columna I (índice 8)
-                // Se usa replace para quitar las comillas "" que Excel a veces añade ocultas en los CSV
-                let wName = cols[3] ? cols[3].replace(/['"]+/g, '') : "Blanco";
-                let bName = cols[8] ? cols[8].replace(/['"]+/g, '') : "Negro";
+                // Lee el nombre desde la columna que detectó el sistema y limpia las comillas
+                let wName = cols[colW] ? cols[colW].replace(/['"]+/g, '') : "Blanco";
+                let bName = cols[colB] ? cols[colB].replace(/['"]+/g, '') : "Negro";
 
                 const nowStr = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
                 newPairings.push({
