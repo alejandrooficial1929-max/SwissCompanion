@@ -283,13 +283,44 @@ function importSwissManagerFile(e) {
         const newPairings = [];
         
         lines.forEach(line => {
-            const cols = line.split(/[\t,;]+/);
-            if (cols.length >= 3 && !isNaN(parseInt(cols[0]))) {
+            // 1. Detectar el delimitador real sin fusionar columnas vacías
+            let delimiter = '\t';
+            if (line.includes('\t')) delimiter = '\t';
+            else if (line.includes(';')) delimiter = ';';
+            else if (line.includes(',')) delimiter = ',';
+
+            const cols = line.split(delimiter).map(c => c.trim());
+            
+            // 2. Si la línea tiene columnas suficientes y empieza con un número de mesa válido
+            if (cols.length >= 5 && cols[0] !== "" && !isNaN(parseInt(cols[0]))) {
+                
+                // En el formato clásico de Swiss Manager con las opciones por defecto:
+                // cols[0]=Mesa, cols[1]=SNo, cols[2]=Blanco, cols[3]=Pts, cols[4]=Res, cols[5]=Pts, cols[6]=Negro
+                let wName = cols[2];
+                let bName = cols.length > 6 ? cols[6] : cols[cols.length - 1];
+
+                // 3. Fallback inteligente: Si la columna 2 resulta ser un número (el Pts por ej.) o está vacía
+                // Filtramos buscando columnas que sean texto (nombres) y rechazamos resultados (ej. "1-0")
+                if (!wName || !isNaN(wName)) {
+                    const textCols = cols.filter(c => 
+                        isNaN(c) && 
+                        c.length > 2 && 
+                        !c.match(/^[0-9]/) && 
+                        c.toLowerCase() !== "vacio" && 
+                        c.toLowerCase() !== "apl"
+                    );
+                    
+                    if (textCols.length >= 2) {
+                        wName = textCols[0];
+                        bName = textCols[1];
+                    }
+                }
+
                 const nowStr = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
                 newPairings.push({
                     board: parseInt(cols[0]),
-                    white: cols[1] ? cols[1].trim() : "Blanco",
-                    black: cols[2] ? cols[2].trim() : "Negro",
+                    white: wName || "Blanco",
+                    black: bName || "Negro",
                     result: "",
                     illegalW: 0,
                     illegalB: 0,
