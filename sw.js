@@ -1,4 +1,4 @@
-const CACHE_NAME = "swisscompanion-v2";
+const CACHE_NAME = "swisscompanion-v3";
 const ASSETS = [
     "./",
     "./index.html",
