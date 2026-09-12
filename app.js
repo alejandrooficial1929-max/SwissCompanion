@@ -4,6 +4,7 @@ let selectedBoardForF = null;
 let maxIllegalsAllowed = 2;
 let pairings = [];
 let html5QrcodeScanner = null;
+let roundsHistory = {}; // Almacenará los datos de cada ronda
 
 // Datos de prueba iniciales para previsualizar la interfaz
 const initialDemoData = [
@@ -14,6 +15,7 @@ const initialDemoData = [
 
 document.addEventListener("DOMContentLoaded", () => {
     pairings = [...initialDemoData];
+    roundsHistory[1] = pairings; // Guardar ronda 1 en el historial
     renderPairings();
     setupEventListeners();
 
@@ -48,7 +50,46 @@ function setupEventListeners() {
     document.getElementById("btnShowQR").onclick = generateQR;
     document.getElementById("btnScanQR").onclick = startQRScanner;
     document.getElementById("fileImport").addEventListener("change", importSwissManagerFile);
-    document.getElementById("btnExport").onclick = exportResultsFile;
+        document.getElementById("btnExport").onclick = exportResultsFile;
+        
+        // Listeners para el control de rondas
+        document.getElementById("btnNewRound").onclick = createNewRound;
+        document.getElementById("roundSelect").addEventListener("change", (e) => {
+            loadRound(parseInt(e.target.value));
+        });
+    }
+
+    function createNewRound() {
+    // 1. Guardar el estado actual
+    roundsHistory[currentRound] = pairings;
+    
+    // 2. Incrementar ronda
+    currentRound++;
+    
+    // 3. Crear opción en el menú desplegable HTML
+    const select = document.getElementById("roundSelect");
+    const option = document.createElement("option");
+    option.value = currentRound;
+    option.text = `Ronda ${currentRound}`;
+    select.appendChild(option);
+    select.value = currentRound; // Seleccionarlo automáticamente
+    
+    // 4. Limpiar la mesa virtual para la nueva ronda
+    pairings = [];
+    roundsHistory[currentRound] = pairings;
+    
+    // 5. Limpiar el input de archivo por si el usuario carga un archivo con el mismo nombre
+    document.getElementById("fileImport").value = "";
+    
+    renderPairings();
+    alert(`¡Ronda ${currentRound} iniciada! Ahora puedes cargar el archivo CSV de los emparejamientos de esta ronda.`);
+}
+
+function loadRound(roundNum) {
+    // Si queremos volver a ver una ronda anterior, la cargamos desde la memoria
+    currentRound = roundNum;
+    pairings = roundsHistory[currentRound] || [];
+    renderPairings();
 }
 
 function renderPairings(filter = "all") {
@@ -340,8 +381,9 @@ function importSwissManagerFile(e) {
 
         if (newPairings.length > 0) {
             pairings = newPairings;
+            roundsHistory[currentRound] = pairings; // Vinculamos los datos a la ronda actual
             renderPairings();
-            alert(`Se cargaron ${newPairings.length} mesas desde el archivo Excel (CSV).`);
+            alert(`Se cargaron ${newPairings.length} mesas para la Ronda ${currentRound}.`);
         } else {
             alert("No se encontraron jugadores en las columnas especificadas (D e I). Verifica el archivo.");
         }
