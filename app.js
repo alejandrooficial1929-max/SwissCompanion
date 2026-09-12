@@ -7,9 +7,9 @@ let html5QrcodeScanner = null;
 
 // Datos de prueba iniciales para previsualizar la interfaz
 const initialDemoData = [
-    { board: 1, white: "Pérez, Juan", black: "Gómez, Carlos", result: "", illegalW: 0, illegalB: 0, timeStart: "10:00:00", timeEnd: null },
-    { board: 2, white: "López, María", black: "Rodríguez, Ana", result: "", illegalW: 0, illegalB: 0, timeStart: "10:00:00", timeEnd: null },
-    { board: 3, white: "Fernández, Luis", black: "Martínez, Sofía", result: "", illegalW: 0, illegalB: 0, timeStart: "10:00:00", timeEnd: null }
+    { board: 1, snoW: 1, snoB: 2, white: "Pérez, Juan", black: "Gómez, Carlos", result: "", illegalW: 0, illegalB: 0, timeStart: "10:00:00", timeEnd: null },
+    { board: 2, snoW: 3, snoB: 4, white: "López, María", black: "Rodríguez, Ana", result: "", illegalW: 0, illegalB: 0, timeStart: "10:00:00", timeEnd: null },
+    { board: 3, snoW: 5, snoB: 6, white: "Fernández, Luis", black: "Martínez, Sofía", result: "", illegalW: 0, illegalB: 0, timeStart: "10:00:00", timeEnd: null }
 ];
 
 document.addEventListener("DOMContentLoaded", () => {
@@ -288,16 +288,19 @@ function importSwissManagerFile(e) {
         else if (lines[0].includes('\t')) delimiter = '\t';
 
         let isParsing = false; 
-        let colW = 3; // Por defecto columna D
-        let colB = 8; // Por defecto columna I
+        let colW = 3, colB = 8;
+        let snoWCol = 1, snoBCol = 9; // Por defecto columnas B y J (donde van los SNo)
 
-        // ¡NUEVA LÓGICA INTELIGENTE! Buscar dinámicamente en qué columnas están los Nombres
+        // ¡NUEVA LÓGICA INTELIGENTE! Buscar dinámicamente columnas de Nombres y SNo
         for (let i = 0; i < lines.length; i++) {
             const headerCols = lines[i].split(delimiter).map(c => c.trim().toLowerCase());
             if (headerCols.includes("nombre")) {
                 colW = headerCols.indexOf("nombre");
                 colB = headerCols.lastIndexOf("nombre");
-                break; // Ya encontramos las columnas correctas
+                // También buscamos el SNo (Número de jugador)
+                snoWCol = headerCols.indexOf("sno.") !== -1 ? headerCols.indexOf("sno.") : 1;
+                snoBCol = headerCols.lastIndexOf("sno.") !== -1 ? headerCols.lastIndexOf("sno.") : 9;
+                break; 
             }
         }
 
@@ -316,10 +319,14 @@ function importSwissManagerFile(e) {
                 // Lee el nombre desde la columna que detectó el sistema y limpia las comillas
                 let wName = cols[colW] ? cols[colW].replace(/['"]+/g, '') : "Blanco";
                 let bName = cols[colB] ? cols[colB].replace(/['"]+/g, '') : "Negro";
+                let sNoWhite = cols[snoWCol] ? cols[snoWCol].replace(/['"]+/g, '') : "0";
+                let sNoBlack = cols[snoBCol] ? cols[snoBCol].replace(/['"]+/g, '') : "0";
 
                 const nowStr = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
                 newPairings.push({
                     board: boardNum,
+                    snoW: sNoWhite,
+                    snoB: sNoBlack,
                     white: wName,
                     black: bName,
                     result: "",
@@ -343,14 +350,33 @@ function importSwissManagerFile(e) {
 }
 
 function exportResultsFile() {
-    let content = "";
+    // Cabecera exacta que espera Swiss Manager
+    let content = "Ronda;Mesa;ID-B;ID-N;NoB;NoN;ResB;ResM;Incomparecencia;Res;Mno;ResEloB;ResEloN\n";
+    let hasResults = false;
+
     pairings.forEach(p => {
         if (p.result) {
-            content += `${p.board};${p.result}\n`;
+            hasResults = true;
+            let resB = "0", resM = "0", incomp = "", resStr = "";
+            
+            // Mapear nuestro resultado al formato estricto de Swiss Manager
+            switch(p.result) {
+                case "1-0": resB = "1"; resM = "0"; resStr = "1:0"; break;
+                case "0-1": resB = "0"; resM = "1"; resStr = "0:1"; break;
+                case "1/2-1/2": resB = "0,5"; resM = "0,5"; resStr = "0,5:0,5"; break;
+                case "1F-0F": resB = "1"; resM = "0"; incomp = "F"; resStr = "1:0F"; break;
+                case "0F-1F": resB = "0"; resM = "1"; incomp = "F"; resStr = "0:1F"; break;
+                case "0F-0F": resB = "0"; resM = "0"; incomp = "F"; resStr = "0:0F"; break;
+                case "1/2F-1/2F": resB = "0,5"; resM = "0,5"; incomp = "F"; resStr = "0,5:0,5F"; break;
+                case "0-0": resB = "0"; resM = "0"; resStr = "0:0"; break;
+                case "1-1": resB = "1"; resM = "1"; resStr = "1:1"; break;
+            }
+
+            content += `${currentRound};${p.board};0;0;${p.snoW || 0};${p.snoB || 0};${resB};${resM};${incomp};${resStr};0;;\n`;
         }
     });
 
-    if (!content) {
+    if (!hasResults) {
         alert("No hay resultados registrados para exportar.");
         return;
     }
