@@ -1,0 +1,128 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SwissCompanion</title>
+    <link rel="stylesheet" href="styles.css">
+    <link rel="manifest" href="manifest.json">
+    <meta name="theme-color" content="#1e1b4b">
+    <!-- Librerías para Códigos QR -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+    <script src="https://unpkg.com/html5-qrcode"></script>
+</head>
+<body>
+    <header>
+        <h1>SwissCompanion</h1>
+        <div class="round-control">
+            <label for="roundSelect">Ronda:</label>
+            <select id="roundSelect">
+                <option value="1">Ronda 1</option>
+            </select>
+            <button id="btnNewRound">+ Nueva Ronda</button>
+        </div>
+    </header>
+
+    <main>
+        <!-- Panel de configuración rápida -->
+        <section class="config-panel">
+            <div class="config-item">
+                <label for="maxIllegal">Max. Ilegales permitidas:</label>
+                <input type="number" id="maxIllegal" value="2" min="1" max="5">
+            </div>
+            <div class="actions">
+                <label class="btn-import">
+                    📁 Cargar Pareos (Swiss Manager)
+                    <input type="file" id="fileImport" accept=".txt,.csv" hidden>
+                </label>
+                <button id="btnExport">💾 Exportar Resultados</button>
+                <button id="btnShowQR">📱 Enviar por QR</button>
+                <button id="btnScanQR">📷 Escanear QR</button>
+            </div>
+        </section>
+
+        <!-- Filtros de salas -->
+        <section class="filters">
+            <button class="filter-btn active" data-filter="all">Todas</button>
+            <button class="filter-btn" data-filter="active">En Juego</button>
+            <button class="filter-btn" data-filter="illegal">Con Ilegales</button>
+            <button class="filter-btn" data-filter="finished">Finalizadas</button>
+        </section>
+
+        <!-- Contenedor de Mesas -->
+        <section id="pairingsContainer" class="pairings-list">
+            <!-- Las mesas cargadas se renderizan aquí dinámicamente -->
+        </section>
+    </main>
+
+    <!-- Modal para Resultados Especiales (Botón F) -->
+    <div id="modalF" class="modal hidden">
+        <div class="modal-content">
+            <span class="close-modal">&times;</span>
+            <h3>Resultados Especiales / Sanciones</h3>
+            <p id="modalBoardInfo">Mesa #</p>
+            <div class="modal-buttons">
+                <button onclick="setSpecialResult('1F-0F')">1F - 0F (Incomparecencia Blancas)</button>
+                <button onclick="setSpecialResult('0F-1F')">0F - 1F (Incomparecencia Negras)</button>
+                <button onclick="setSpecialResult('0F-0F')">0F - 0F (Doble Incomparecencia)</button>
+                <button onclick="setSpecialResult('1/2F-1/2F')">1/2F - 1/2F (Tablas por acuerdo especial)</button>
+                <button onclick="setSpecialResult('0-0')">0 - 0 (Sanción Art. 12 FIDE)</button>
+                <button onclick="setSpecialResult('1-1')">1 - 1 (Sanción Art. 12 FIDE)</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal para Cambiar / Editar Resultado -->
+    <div id="modalEdit" class="modal hidden">
+        <div class="modal-content">
+            <span class="close-modal-edit">&times;</span>
+            <h3>⚙️ Editar Mesa <span id="editBoardNum"></span></h3>
+            <div class="edit-info-box">
+                <p><strong>Ronda:</strong> <span id="editRoundNum"></span></p>
+                <p><strong>Partida:</strong> <span id="editPlayers"></span></p>
+                <p><strong>Resultado actual:</strong> <span id="editCurrentResult" class="highlight-res"></span></p>
+                <p><strong>Hora inicio:</strong> <span id="editTimeStart"></span> | <strong>Hora fin:</strong> <span id="editTimeEnd"></span></p>
+            </div>
+            
+            <h4>Seleccionar nuevo resultado:</h4>
+            <div class="modal-buttons-grid">
+                <button onclick="applyEditResult('1-0')">1-0</button>
+                <button onclick="applyEditResult('1/2-1/2')">1/2-1/2</button>
+                <button onclick="applyEditResult('0-1')">0-1</button>
+            </div>
+            
+            <h4>Resultados especiales / Sanciones:</h4>
+            <select id="selectSpecialEdit" onchange="applyEditResult(this.value)">
+                <option value="">-- Seleccionar especial --</option>
+                <option value="1F-0F">1F-0F (Incomparecencia Blancas)</option>
+                <option value="0F-1F">0F-1F (Incomparecencia Negras)</option>
+                <option value="0F-0F">0F-0F (Doble Incomparecencia)</option>
+                <option value="1/2F-1/2F">1/2F-1/2F (Tablas especiales)</option>
+                <option value="0-0">0-0 (Sanción Art. 12 FIDE)</option>
+                <option value="1-1">1-1 (Sanción Art. 12 FIDE)</option>
+            </select>
+
+            <div class="checkbox-container">
+                <input type="checkbox" id="chkUpdateEndTime">
+                <label for="chkUpdateEndTime">Actualizar hora de finalización a la hora actual</label>
+            </div>
+
+            <div class="modal-danger-area">
+                <button class="btn-clear-res" onclick="clearResult()">🗑️ Borrar resultado y reactivar mesa</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal para Escáner y Generador de QR -->
+    <div id="modalQR" class="modal hidden">
+        <div class="modal-content">
+            <span class="close-modal-qr">&times;</span>
+            <h3 id="qrModalTitle">Sincronización QR</h3>
+            <div id="qrContainer"></div>
+            <div id="qrReader" style="width: 100%; display: none;"></div>
+        </div>
+    </div>
+
+    <script src="app.js"></script>
+</body>
+</html>
