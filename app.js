@@ -282,45 +282,41 @@ function importSwissManagerFile(e) {
         const lines = event.target.result.split("\n");
         const newPairings = [];
         
-        lines.forEach(line => {
-            // 1. Detectar el delimitador real sin fusionar columnas vacías
-            let delimiter = '\t';
-            if (line.includes('\t')) delimiter = '\t';
-            else if (line.includes(';')) delimiter = ';';
-            else if (line.includes(',')) delimiter = ',';
+        // Excel usa punto y coma (;) o coma (,) al guardar como CSV según el idioma de la PC
+        let delimiter = ',';
+        if (lines[0].includes(';')) delimiter = ';';
+        else if (lines[0].includes('\t')) delimiter = '\t';
+
+        let isParsing = false; // Bandera para saber si ya estamos dentro de la tabla
+
+        for (let i = 0; i < lines.length; i++) {
+            const line = lines[i].trim();
+            
+            // Verificamos si es una fila vacía (limpiando los delimitadores)
+            const emptyCheck = line.replace(new RegExp(delimiter, 'g'), '');
+            
+            // Si ya estábamos leyendo jugadores y nos topamos con una fila vacía, terminamos la lectura
+            if (isParsing && emptyCheck === "") {
+                break;
+            }
 
             const cols = line.split(delimiter).map(c => c.trim());
+            const boardNum = parseInt(cols[0]);
             
-            // 2. Si la línea tiene columnas suficientes y empieza con un número de mesa válido
-            if (cols.length >= 5 && cols[0] !== "" && !isNaN(parseInt(cols[0]))) {
+            // Si la columna A (índice 0) es un número de mesa válido, la leemos
+            if (!isNaN(boardNum) && boardNum > 0) {
+                isParsing = true; // Empezamos a leer la tabla
                 
-                // En el formato clásico de Swiss Manager con las opciones por defecto:
-                // cols[0]=Mesa, cols[1]=SNo, cols[2]=Blanco, cols[3]=Pts, cols[4]=Res, cols[5]=Pts, cols[6]=Negro
-                let wName = cols[2];
-                let bName = cols.length > 6 ? cols[6] : cols[cols.length - 1];
-
-                // 3. Fallback inteligente: Si la columna 2 resulta ser un número (el Pts por ej.) o está vacía
-                // Filtramos buscando columnas que sean texto (nombres) y rechazamos resultados (ej. "1-0")
-                if (!wName || !isNaN(wName)) {
-                    const textCols = cols.filter(c => 
-                        isNaN(c) && 
-                        c.length > 2 && 
-                        !c.match(/^[0-9]/) && 
-                        c.toLowerCase() !== "vacio" && 
-                        c.toLowerCase() !== "apl"
-                    );
-                    
-                    if (textCols.length >= 2) {
-                        wName = textCols[0];
-                        bName = textCols[1];
-                    }
-                }
+                // Forzamos la lectura estricta: Columna D (índice 3) y Columna I (índice 8)
+                // Se usa replace para quitar las comillas "" que Excel a veces añade ocultas en los CSV
+                let wName = cols[3] ? cols[3].replace(/['"]+/g, '') : "Blanco";
+                let bName = cols[8] ? cols[8].replace(/['"]+/g, '') : "Negro";
 
                 const nowStr = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
                 newPairings.push({
-                    board: parseInt(cols[0]),
-                    white: wName || "Blanco",
-                    black: bName || "Negro",
+                    board: boardNum,
+                    white: wName,
+                    black: bName,
                     result: "",
                     illegalW: 0,
                     illegalB: 0,
@@ -328,14 +324,14 @@ function importSwissManagerFile(e) {
                     timeEnd: null
                 });
             }
-        });
+        }
 
         if (newPairings.length > 0) {
             pairings = newPairings;
             renderPairings();
-            alert(`Se cargaron ${newPairings.length} mesas desde el archivo.`);
+            alert(`Se cargaron ${newPairings.length} mesas desde el archivo Excel (CSV).`);
         } else {
-            alert("No se pudo interpretar la estructura del archivo.");
+            alert("No se encontraron jugadores en las columnas especificadas (D e I). Verifica el archivo.");
         }
     };
     reader.readAsText(file);
