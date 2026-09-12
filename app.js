@@ -1,10 +1,25 @@
+// Configuración de Firebase
+const firebaseConfig = {
+    apiKey: "AIzaSyAPY8Nwj2nAQSpIzxYVyyuBe5iM8-vYsdM",
+    authDomain: "swiss-companion.firebaseapp.com",
+    databaseURL: "https://swiss-companion-default-rtdb.firebaseio.com",
+    projectId: "swiss-companion",
+    storageBucket: "swiss-companion.firebasestorage.app",
+    messagingSenderId: "612750967125",
+    appId: "1:612750967125:web:a88fb3bfa3c583c4812fdc"
+};
+firebase.initializeApp(firebaseConfig);
+const database = firebase.database();
+
 // Estado global de la aplicación
 let currentRound = 1;
 let selectedBoardForF = null;
 let maxIllegalsAllowed = 2;
 let pairings = [];
 let html5QrcodeScanner = null;
-let roundsHistory = {}; // Almacenará los datos de cada ronda
+let roundsHistory = {}; 
+let isArbiter = false; // Rol por defecto: Espectador
+let isSyncing = false; // Evita bucles de sincronización infinita
 
 // Datos de prueba iniciales para previsualizar la interfaz
 const initialDemoData = [
@@ -14,10 +29,31 @@ const initialDemoData = [
 ];
 
 document.addEventListener("DOMContentLoaded", () => {
-    pairings = [...initialDemoData];
-    roundsHistory[1] = pairings; // Guardar ronda 1 en el historial
-    renderPairings();
     setupEventListeners();
+    
+    // Escuchar cambios desde Firebase (Tiempo real)
+    database.ref('torneo/actual').on('value', (snapshot) => {
+        const data = snapshot.val();
+        if (data) {
+            isSyncing = true; // Pausar envío mientras recibimos datos
+            currentRound = data.currentRound || 1;
+            pairings = data.pairings || [];
+            maxIllegalsAllowed = data.maxIllegalsAllowed || 2;
+            roundsHistory = data.roundsHistory || { 1: pairings };
+
+            // Actualizar interfaz con los datos de la nube
+            document.getElementById("roundSelect").value = currentRound;
+            document.getElementById("maxIllegal").value = maxIllegalsAllowed;
+            
+            renderPairings();
+            isSyncing = false;
+        } else {
+            // Si la base de datos está vacía, cargamos los de prueba
+            pairings = [...initialDemoData];
+            roundsHistory[1] = pairings;
+            renderPairings();
+        }
+    });
 
     // Registrar Service Worker para PWA
     if ("serviceWorker" in navigator) {
@@ -25,9 +61,36 @@ document.addEventListener("DOMContentLoaded", () => {
     }
 });
 
+function syncToCloud() {
+    if (!isArbiter || isSyncing) return; // Solo el árbitro envía datos a la nube
+    database.ref('torneo/actual').set({
+        currentRound: currentRound,
+        pairings: pairings,
+        maxIllegalsAllowed: maxIllegalsAllowed,
+        roundsHistory: roundsHistory
+    });
+}
+
+function unlockArbiter() {
+    if (isArbiter) return; // Ya está desbloqueado
+    const pin = prompt("Ingresa el PIN de Árbitro:");
+    if (pin === "1234") { // Contraseña por defecto
+        isArbiter = true;
+        document.body.classList.add("arbiter-mode");
+        const btn = document.getElementById("btnUnlock");
+        btn.innerText = "🔓 Árbitro";
+        btn.classList.add("unlocked");
+        renderPairings(); // Re-renderizar para mostrar botones
+        alert("Modo Árbitro activado.");
+    } else if (pin !== null) {
+        alert("PIN incorrecto.");
+    }
+}
+
 function setupEventListeners() {
     document.getElementById("maxIllegal").addEventListener("change", (e) => {
         maxIllegalsAllowed = parseInt(e.target.value) || 2;
+        syncToCloud();
     });
 
     document.querySelectorAll(".filter-btn").forEach(btn => {
@@ -82,6 +145,7 @@ function setupEventListeners() {
     document.getElementById("fileImport").value = "";
     
     renderPairings();
+    syncToCloud();
     alert(`¡Ronda ${currentRound} iniciada! Ahora puedes cargar el archivo CSV de los emparejamientos de esta ronda.`);
 }
 
@@ -90,6 +154,7 @@ function loadRound(roundNum) {
     currentRound = roundNum;
     pairings = roundsHistory[currentRound] || [];
     renderPairings();
+    syncToCloud();
 }
 
 function renderPairings(filter = "all") {
@@ -108,12 +173,31 @@ function renderPairings(filter = "all") {
         card.className = `board-card ${p.result ? 'finished' : ''} ${p.illegalW > 0 || p.illegalB > 0 ? 'has-illegal' : ''}`;
         
         // Determinar los botones de acción según si ya hay o no resultado cargado
-        const actionButtonsHTML = p.result 
-            ? `<button class="btn-change-res" onclick="openEditModal(${p.board})">⚙️ Cambiar resultado</button>`
-            : `<button class="btn-res" onclick="setResult(${p.board}, '1-0')">1-0</button>
-               <button class="btn-res" onclick="setResult(${p.board}, '1/2-1/2')">1/2-1/2</button>
-               <button class="btn-res" onclick="setResult(${p.board}, '0-1')">0-1</button>
-               <button class="btn-res" onclick="openModalF(${p.board})">F (Especial)</button>`;
+        // Variables para ocultar botones a los espectadores
+        let actionButtonsHTML = "";
+        let illegalControlsW = "";
+        let illegalControlsB = "";
+
+        if (isArbiter) {
+            actionButtonsHTML = p.result 
+                ? `<button class="btn-change-res" onclick="openEditModal(${p.board})">⚙️ Cambiar resultado</button>`
+                : `<button class="btn-res" onclick="setResult(${p.board}, '1-0')">1-0</button>
+                   <button class="btn-res" onclick="setResult(${p.board}, '1/2-1/2')">1/2-1/2</button>
+                   <button class="btn-res" onclick="setResult(${p.board}, '0-1')">0-1</button>
+                   <button class="btn-res" onclick="openModalF(${p.board})">F (Especial)</button>`;
+            
+            illegalControlsW = `
+                <div class="illegal-controls">
+                    <button class="btn-illegal" onclick="addIllegal(${p.board}, 'W')">+1 Ilegal</button>
+                    ${p.illegalW > 0 ? `<button class="btn-illegal-sub" onclick="subtractIllegal(${p.board}, 'W')">-1</button>` : ''}
+                </div>`;
+            
+            illegalControlsB = `
+                <div class="illegal-controls">
+                    <button class="btn-illegal" onclick="addIllegal(${p.board}, 'B')">+1 Ilegal</button>
+                    ${p.illegalB > 0 ? `<button class="btn-illegal-sub" onclick="subtractIllegal(${p.board}, 'B')">-1</button>` : ''}
+                </div>`;
+        }
 
         card.innerHTML = `
             <div class="board-header">
@@ -124,10 +208,7 @@ function renderPairings(filter = "all") {
                 <div class="player">
                     <span class="player-name">⚪ ${p.white}</span>
                     <span class="illegal-badge">${p.illegalW > 0 ? '⚠️ Ilegales: ' + p.illegalW : ''}</span>
-                    <div class="illegal-controls">
-                        <button class="btn-illegal" onclick="addIllegal(${p.board}, 'W')">+1 Ilegal</button>
-                        ${p.illegalW > 0 ? `<button class="btn-illegal-sub" onclick="subtractIllegal(${p.board}, 'W')">-1</button>` : ''}
-                    </div>
+                    ${illegalControlsW}
                 </div>
                 <div class="versus-container">
                     <span class="result-badge ${p.result ? 'has-result' : ''}">
@@ -137,10 +218,7 @@ function renderPairings(filter = "all") {
                 <div class="player">
                     <span class="player-name">⚫ ${p.black}</span>
                     <span class="illegal-badge">${p.illegalB > 0 ? '⚠️ Ilegales: ' + p.illegalB : ''}</span>
-                    <div class="illegal-controls">
-                        <button class="btn-illegal" onclick="addIllegal(${p.board}, 'B')">+1 Ilegal</button>
-                        ${p.illegalB > 0 ? `<button class="btn-illegal-sub" onclick="subtractIllegal(${p.board}, 'B')">-1</button>` : ''}
-                    </div>
+                    ${illegalControlsB}
                 </div>
             </div>
             <div class="result-buttons">
@@ -157,6 +235,7 @@ function setResult(boardNum, result) {
         p.result = result;
         p.timeEnd = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
         renderPairings();
+        syncToCloud();
     }
 }
 
@@ -180,6 +259,7 @@ function addIllegal(boardNum, color) {
         }
     }
     renderPairings();
+    syncToCloud();
 }
 
 function subtractIllegal(boardNum, color) {
@@ -192,6 +272,7 @@ function subtractIllegal(boardNum, color) {
         p.illegalB--;
     }
     renderPairings();
+    syncToCloud();
 }
 
 function openEditModal(boardNum) {
@@ -223,6 +304,7 @@ function applyEditResult(newResult) {
         document.getElementById("modalEdit").classList.add("hidden");
         selectedBoardForF = null;
         renderPairings();
+        syncToCloud();
     }
 }
 
@@ -235,6 +317,7 @@ function clearResult() {
         document.getElementById("modalEdit").classList.add("hidden");
         selectedBoardForF = null;
         renderPairings();
+        syncToCloud();
     }
 }
 
@@ -383,6 +466,7 @@ function importSwissManagerFile(e) {
             pairings = newPairings;
             roundsHistory[currentRound] = pairings; // Vinculamos los datos a la ronda actual
             renderPairings();
+            syncToCloud();
             alert(`Se cargaron ${newPairings.length} mesas para la Ronda ${currentRound}.`);
         } else {
             alert("No se encontraron jugadores en las columnas especificadas (D e I). Verifica el archivo.");
