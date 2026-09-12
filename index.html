@@ -10,11 +10,15 @@
     <!-- Librerías para Códigos QR -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
     <script src="https://unpkg.com/html5-qrcode"></script>
+    <!-- Firebase SDKs -->
+    <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-database-compat.js"></script>
 </head>
 <body>
     <header>
         <h1>SwissCompanion</h1>
         <div class="round-control">
+            <button id="btnUnlock" onclick="unlockArbiter()" class="btn-unlock">🔒 Espectador</button>
             <label for="roundSelect">Ronda:</label>
             <select id="roundSelect">
                 <option value="1">Ronda 1</option>
@@ -24,8 +28,8 @@
     </header>
 
     <main>
-        <!-- Panel de configuración rápida -->
-        <section class="config-panel">
+        <!-- Panel de configuración rápida (Oculto para espectadores) -->
+        <section class="config-panel arbiter-only">
             <div class="config-item">
                 <label for="maxIllegal">Max. Ilegales permitidas:</label>
                 <input type="number" id="maxIllegal" value="2" min="1" max="5">
