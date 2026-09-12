@@ -36,6 +36,27 @@ header {
     box-shadow: 0 4px 20px rgba(0, 0, 0, 0.4);
 }
 
+/* Controles de Roles */
+.arbiter-only {
+    display: none !important;
+}
+
+body.arbiter-mode .arbiter-only {
+    display: flex !important;
+}
+
+.btn-unlock {
+    background: #334155;
+    color: white;
+    border: 1px solid #475569;
+    margin-right: 15px;
+}
+
+.btn-unlock.unlocked {
+    background: var(--success);
+    border-color: var(--success);
+}
+
 header h1 {
     margin: 0;
     font-size: 1.5rem;
