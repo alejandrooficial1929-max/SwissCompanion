@@ -225,6 +225,7 @@ button:hover, .btn-import:hover {
     border-radius: 20px;
     letter-spacing: 0.5px;
     text-align: center;
+    white-space: nowrap; /* Evita que el 1/2-1/2 se parta en dos líneas */
 }
 
 .result-badge.has-result {
@@ -469,8 +470,8 @@ button:hover, .btn-import:hover {
     }
 
     .board-players {
-        grid-template-columns: 1fr 60px 1fr; /* Reduce el espacio del "VS" */
-        gap: 8px;
+        grid-template-columns: 1fr auto 1fr; /* Deja que el centro se adapte al contenido */
+        gap: 10px;
     }
 
     .player-name {
@@ -479,13 +480,13 @@ button:hover, .btn-import:hover {
 
     .result-buttons {
         display: grid;
-        grid-template-columns: repeat(4, 1fr); /* Cuadrícula exacta de 4 botones */
-        gap: 6px;
+        grid-template-columns: repeat(2, 1fr); /* Cuadrícula de 2x2 para botones más cómodos */
+        gap: 8px;
     }
 
     .btn-res {
-        padding: 10px 4px;
-        font-size: 0.85rem;
+        padding: 12px 4px;
+        font-size: 0.95rem; /* Letra un poco más grande para lectura fácil */
         max-width: 100%;
     }
 
