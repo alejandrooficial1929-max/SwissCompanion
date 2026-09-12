@@ -367,9 +367,7 @@ function exportResultsFile() {
                 case "1F-0F": resB = "1"; resM = "0"; incomp = "F"; resStr = "1:0F"; break;
                 case "0F-1F": resB = "0"; resM = "1"; incomp = "F"; resStr = "0:1F"; break;
                 case "0F-0F": resB = "0"; resM = "0"; incomp = "F"; resStr = "0:0F"; break;
-                case "1/2F-1/2F": resB = "0,5"; resM = "0,5"; incomp = "F"; resStr = "0,5:0,5F"; break;
-                case "0-0": resB = "0"; resM = "0"; resStr = "0:0"; break;
-                case "1-1": resB = "1"; resM = "1"; resStr = "1:1"; break;
+                case "0-0": resB = "0"; resM = "0"; incomp = "v"; resStr = "0:0v"; break;
             }
 
             content += `${currentRound};${p.board};0;0;${p.snoW || 0};${p.snoB || 0};${resB};${resM};${incomp};${resStr};0;;\n`;
