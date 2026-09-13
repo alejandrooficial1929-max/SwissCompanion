@@ -345,24 +345,14 @@ function generateQR() {
     container.style.display = "block";
     reader.style.display = "none";
     
-    // Comprimimos TODOS los datos en arrays simples para enviar la mesa completa
-    const compressedPairings = pairings.map(p => [
-        p.board, 
-        p.snoW || 0, 
-        p.snoB || 0, 
-        p.white, 
-        p.black, 
-        p.result || "", 
-        p.illegalW || 0, 
-        p.illegalB || 0
-    ]);
+    // Formato Ultra-Compacto: Solo enviamos Mesa, Resultado e Ilegales
+    // Ejemplo: 1|1,1-0,0,0;2,X,1,0
+    const compactData = pairings.map(p => {
+        let r = p.result || "X"; // X significa que no hay resultado aún
+        return `${p.board},${r},${p.illegalW || 0},${p.illegalB || 0}`;
+    }).join(";");
 
-    const dataToEncode = {
-        r: currentRound,
-        p: compressedPairings
-    };
-
-    const dataString = JSON.stringify(dataToEncode);
+    const dataString = `${currentRound}|${compactData}`;
     
     new QRCode(container, {
         text: dataString,
@@ -386,41 +376,42 @@ function startQRScanner() {
     html5QrcodeScanner = new Html5QrcodeScanner("qrReader", { fps: 10, qrbox: 250 });
     html5QrcodeScanner.render((decodedText) => {
         try {
-            const data = JSON.parse(decodedText);
-            
-            // Verificamos si vienen en el nuevo formato comprimido (con la propiedad "p")
-            if (data.p) {
-                currentRound = data.r || 1;
-                // Reconstruimos el objeto completo para que la app lo entienda
-                pairings = data.p.map(arr => ({
-                    board: arr[0],
-                    snoW: arr[1],
-                    snoB: arr[2],
-                    white: arr[3],
-                    black: arr[4],
-                    result: arr[5],
-                    illegalW: arr[6],
-                    illegalB: arr[7],
-                    timeStart: new Date().toLocaleTimeString(), // Reiniciamos los tiempos
-                    timeEnd: null
-                }));
-            }
+            // Verificamos que sea nuestro formato ultra-compacto (Ej: "1|1,1-0,0,0")
+            if (decodedText.includes("|")) {
+                const parts = decodedText.split("|");
+                currentRound = parseInt(parts[0]);
+                
+                const mesas = parts[1].split(";");
+                mesas.forEach(mesaStr => {
+                    const [boardStr, resultStr, illWStr, illBStr] = mesaStr.split(",");
+                    const boardNum = parseInt(boardStr);
+                    
+                    // Buscamos la mesa correspondiente que ya debe estar cargada
+                    const p = pairings.find(x => x.board === boardNum);
+                    if (p) {
+                        p.result = resultStr === "X" ? "" : resultStr;
+                        p.illegalW = parseInt(illWStr);
+                        p.illegalB = parseInt(illBStr);
+                        if (p.result) {
+                            p.timeEnd = new Date().toLocaleTimeString();
+                        }
+                    }
+                });
 
-            // Actualizamos la interfaz y enviamos a la nube si hay internet
-            document.getElementById("roundSelect").value = currentRound;
-            renderPairings();
-            syncToCloud();
-            
-            alert("¡Datos sincronizados correctamente desde el QR!");
-            
-            // Cierra el modal del escáner
-            document.getElementById("modalQR").classList.add("hidden");
-            if (html5QrcodeScanner) {
-                html5QrcodeScanner.clear();
+                document.getElementById("roundSelect").value = currentRound;
+                renderPairings();
+                syncToCloud();
+                
+                alert("¡Resultados sincronizados correctamente!");
+                
+                document.getElementById("modalQR").classList.add("hidden");
+                if (html5QrcodeScanner) html5QrcodeScanner.clear();
+            } else {
+                alert("Formato de QR no reconocido.");
             }
         } catch (error) {
             console.error("Error al leer QR", error);
-            alert("Código QR no válido o corrupto.");
+            alert("Error al procesar el código QR.");
         }
     });
 }
