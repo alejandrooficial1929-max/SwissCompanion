@@ -426,41 +426,41 @@ function startQRScanner() {
     html5QrcodeScanner = new Html5QrcodeScanner("qrReader", { fps: 15, qrbox: 250 });
     html5QrcodeScanner.render((decodedText) => {
         try {
-            // Extraer el encabezado matemático (Ej: "1/3|datos")
-            const match = decodedText.match(/^(\d+)\/(\d+)\|(.*)$/);
+            const pipeIdx = decodedText.indexOf('|');
             
-            if (match) {
-                const partNumber = parseInt(match[1]);
-                const totalParts = parseInt(match[2]);
-                const dataChunk = match[3];
+            // Verificamos si tiene el encabezado de fragmento (Ej: "1/3|")
+            if (pipeIdx > 0 && pipeIdx < 10 && decodedText.substring(0, pipeIdx).includes('/')) {
+                const header = decodedText.substring(0, pipeIdx);
+                const [partStr, totalStr] = header.split('/');
+                const partNumber = parseInt(partStr);
+                const totalParts = parseInt(totalStr);
+                const dataChunk = decodedText.substring(pipeIdx + 1);
                 
-                // Guardar en el índice exacto (-1 porque los arrays empiezan en 0)
-                if (!scannedChunks[partNumber - 1]) {
+                if (!isNaN(partNumber) && !isNaN(totalParts) && !scannedChunks[partNumber - 1]) {
                     scannedChunks[partNumber - 1] = dataChunk;
                     
                     const partsRead = scannedChunks.filter(Boolean).length;
-                    progress.innerText = `Escaneado: ${partsRead} de ${totalParts} partes`;
+                    if (progress) progress.innerText = `Escaneado: ${partsRead} de ${totalParts} partes`;
                     
-                    // Si ya tenemos todas las piezas del rompecabezas
                     if (partsRead === totalParts) {
                         if (html5QrcodeScanner) html5QrcodeScanner.pause(true); 
-                        progress.innerText = "¡Procesando datos...";
+                        if (progress) progress.innerText = "¡Procesando datos...";
                         
-                        const fullCompressedText = scannedChunks.join(""); // Unimos todo en orden
+                        const fullCompressedText = scannedChunks.join(""); 
                         const decompressedText = LZString.decompressFromEncodedURIComponent(fullCompressedText);
-                        
                         processDecodedData(decompressedText);
                     }
                 }
             } else {
-                // Retrocompatibilidad (Por si escaneamos un QR viejo sin dividir)
+                // QR Antiguo de 1 sola pieza
                 const decompressedText = LZString.decompressFromEncodedURIComponent(decodedText) || decodedText;
                 if (decompressedText.includes("|")) {
+                    if (html5QrcodeScanner) html5QrcodeScanner.pause(true);
                     processDecodedData(decompressedText);
                 }
             }
         } catch (error) {
-            console.error("Error al procesar QR fragmentado", error);
+            console.error("Error al procesar QR", error);
         }
     });
 }
