@@ -544,4 +544,7 @@ button:hover, .btn-import:hover {
 #qrContainer img, #qrContainer canvas {
     display: block !important;
     margin: 0 auto;
+    max-width: 100%;
+    height: auto !important;
+    aspect-ratio: 1 / 1; /* Fuerza a que sea un cuadrado perfecto siempre */
 }
