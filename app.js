@@ -391,25 +391,25 @@ function startQRScanner() {
     document.getElementById("qrModalTitle").innerText = "Escanear Código QR";
     container.style.display = "none";
     reader.style.display = "block";
-    if(qrOptions) qrOptions.classList.add("hidden"); // Ocultamos los botones al escanear
+    if(qrOptions) qrOptions.classList.add("hidden"); 
     
     modal.classList.remove("hidden");
     
     html5QrcodeScanner = new Html5QrcodeScanner("qrReader", { fps: 10, qrbox: 250 });
     html5QrcodeScanner.render((decodedText) => {
         try {
-            // DESCOMPRIMIR: Restauramos los datos gigantes a partir del texto comprimido
+            // DESCOMPRESIÓN: Esta línea es la que traduce el código comprimido a texto legible
             const decompressedText = LZString.decompressFromEncodedURIComponent(decodedText) || decodedText;
 
             if (decompressedText.includes("|")) {
                 const parts = decompressedText.split("|");
-                const mode = parts[0]; // Sabremos si es 'E' (Emparejamientos) o 'R' (Resultados)
+                const mode = parts[0]; 
                 currentRound = parseInt(parts[1]);
                 
                 const mesas = parts[2].split(";");
                 
                 if (mode === "E") {
-                    // Cargar Emparejamientos (PC ➡️ Celular)
+                    // Cargar Emparejamientos
                     pairings = mesas.map(mesaStr => {
                         const [board, snoW, snoB, white, black] = mesaStr.split(",");
                         return {
@@ -427,7 +427,7 @@ function startQRScanner() {
                     });
                     alert("¡Emparejamientos sincronizados correctamente!");
                 } else if (mode === "R") {
-                    // Actualizar Resultados (Celular ➡️ PC)
+                    // Cargar Resultados
                     mesas.forEach(mesaStr => {
                         const [boardStr, resultStr, illWStr, illBStr] = mesaStr.split(",");
                         const boardNum = parseInt(boardStr);
