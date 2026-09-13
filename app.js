@@ -20,6 +20,8 @@ let html5QrcodeScanner = null;
 let roundsHistory = {}; 
 let isArbiter = false; // Rol por defecto: Espectador
 let isSyncing = false; // Evita bucles de sincronización infinita
+let qrInterval = null; // Para la rotación automática de QRs
+let scannedChunks = []; // Para almacenar los pedazos de QR leídos
 
 // Datos de prueba iniciales para previsualizar la interfaz
 const initialDemoData = [
@@ -340,19 +342,21 @@ function generateQR() {
     const container = document.getElementById("qrContainer");
     const reader = document.getElementById("qrReader");
     const qrOptions = document.getElementById("qrOptions");
+    const progress = document.getElementById("qrProgress");
     
     document.getElementById("qrModalTitle").innerText = "Generar Código QR";
     container.innerHTML = "";
     container.style.display = "block";
     reader.style.display = "none";
-    if(qrOptions) qrOptions.classList.remove("hidden"); // Mostrar las opciones
+    progress.innerText = "";
+    if(qrOptions) qrOptions.classList.remove("hidden");
     
-    // Ver qué opción eligió el usuario (Emparejamientos o Resultados)
+    clearInterval(qrInterval); // Limpiar carrusel previo
+    
     const mode = document.querySelector('input[name="qrMode"]:checked').value;
     let dataString = "";
 
     if (mode === "E") {
-        // NOMBRES COMPLETOS: Quitamos comas para no romper el formato, conservando los nombres reales
         const compactData = pairings.map(p => {
             const w = p.white ? p.white.replace(/,/g, '').trim() : "";
             const b = p.black ? p.black.replace(/,/g, '').trim() : "";
@@ -360,7 +364,6 @@ function generateQR() {
         }).join(";");
         dataString = `E|${currentRound}|${compactData}`;
     } else {
-        // Modo Resultados (Envía: Mesa, Resultados, Ilegales)
         const compactData = pairings.map(p => {
             let r = p.result || "X";
             return `${p.board},${r},${p.illegalW || 0},${p.illegalB || 0}`;
@@ -368,17 +371,39 @@ function generateQR() {
         dataString = `R|${currentRound}|${compactData}`;
     }
 
-    // MAGIA: Comprimir los datos como un archivo ZIP ultraligero
     const compressedData = LZString.compressToEncodedURIComponent(dataString);
-
-    // Generar QR con la información comprimida
-    new QRCode(container, {
-        text: compressedData,
-        width: 320,
-        height: 320,
-        correctLevel : QRCode.CorrectLevel.M
-    });
     
+    // DIVIDIR EN FRAGMENTOS (200 caracteres max para garantizar lectura rápida y fluida)
+    const chunkSize = 200; 
+    const chunks = [];
+    for (let i = 0; i < compressedData.length; i += chunkSize) {
+        chunks.push(compressedData.substring(i, i + chunkSize));
+    }
+    
+    const totalChunks = chunks.length;
+    
+    if (totalChunks === 1) {
+        progress.innerText = "1 QR generado";
+        new QRCode(container, {
+            text: `1/1|${chunks[0]}`,
+            width: 320, height: 320,
+            correctLevel : QRCode.CorrectLevel.L
+        });
+    } else {
+        let currentChunkIndex = 0;
+        const drawCurrentQR = () => {
+            container.innerHTML = ""; 
+            progress.innerText = `Mostrando parte ${currentChunkIndex + 1} de ${totalChunks}`;
+            new QRCode(container, {
+                text: `${currentChunkIndex + 1}/${totalChunks}|${chunks[currentChunkIndex]}`,
+                width: 320, height: 320,
+                correctLevel : QRCode.CorrectLevel.L // Low para cuadros grandes
+            });
+            currentChunkIndex = (currentChunkIndex + 1) % totalChunks; 
+        };
+        drawCurrentQR(); 
+        qrInterval = setInterval(drawCurrentQR, 750); // Cambia cada 750 milisegundos
+    }
     modal.classList.remove("hidden");
 }
 
@@ -387,82 +412,103 @@ function startQRScanner() {
     const container = document.getElementById("qrContainer");
     const reader = document.getElementById("qrReader");
     const qrOptions = document.getElementById("qrOptions");
+    const progress = document.getElementById("qrProgress");
     
     document.getElementById("qrModalTitle").innerText = "Escanear Código QR";
     container.style.display = "none";
     reader.style.display = "block";
+    progress.innerText = "Esperando código QR...";
     if(qrOptions) qrOptions.classList.add("hidden"); 
     
+    scannedChunks = []; // Reiniciamos los pedazos recolectados
     modal.classList.remove("hidden");
     
-    html5QrcodeScanner = new Html5QrcodeScanner("qrReader", { fps: 10, qrbox: 250 });
+    html5QrcodeScanner = new Html5QrcodeScanner("qrReader", { fps: 15, qrbox: 250 });
     html5QrcodeScanner.render((decodedText) => {
         try {
-            // DESCOMPRESIÓN: Esta línea es la que traduce el código comprimido a texto legible
-            const decompressedText = LZString.decompressFromEncodedURIComponent(decodedText) || decodedText;
-
-            if (decompressedText.includes("|")) {
-                const parts = decompressedText.split("|");
-                const mode = parts[0]; 
-                currentRound = parseInt(parts[1]);
+            // Extraer el encabezado matemático (Ej: "1/3|datos")
+            const match = decodedText.match(/^(\d+)\/(\d+)\|(.*)$/);
+            
+            if (match) {
+                const partNumber = parseInt(match[1]);
+                const totalParts = parseInt(match[2]);
+                const dataChunk = match[3];
                 
-                const mesas = parts[2].split(";");
-                
-                if (mode === "E") {
-                    // Cargar Emparejamientos
-                    pairings = mesas.map(mesaStr => {
-                        const [board, snoW, snoB, white, black] = mesaStr.split(",");
-                        return {
-                            board: parseInt(board),
-                            snoW: snoW,
-                            snoB: snoB,
-                            white: white,
-                            black: black,
-                            result: "",
-                            illegalW: 0,
-                            illegalB: 0,
-                            timeStart: new Date().toLocaleTimeString(),
-                            timeEnd: null
-                        };
-                    });
-                    alert("¡Emparejamientos sincronizados correctamente!");
-                } else if (mode === "R") {
-                    // Cargar Resultados
-                    mesas.forEach(mesaStr => {
-                        const [boardStr, resultStr, illWStr, illBStr] = mesaStr.split(",");
-                        const boardNum = parseInt(boardStr);
-                        const p = pairings.find(x => x.board === boardNum);
-                        if (p) {
-                            p.result = resultStr === "X" ? "" : resultStr;
-                            p.illegalW = parseInt(illWStr);
-                            p.illegalB = parseInt(illBStr);
-                            if (p.result && !p.timeEnd) {
-                                p.timeEnd = new Date().toLocaleTimeString();
-                            }
-                        }
-                    });
-                    alert("¡Resultados sincronizados correctamente!");
+                // Guardar en el índice exacto (-1 porque los arrays empiezan en 0)
+                if (!scannedChunks[partNumber - 1]) {
+                    scannedChunks[partNumber - 1] = dataChunk;
+                    
+                    const partsRead = scannedChunks.filter(Boolean).length;
+                    progress.innerText = `Escaneado: ${partsRead} de ${totalParts} partes`;
+                    
+                    // Si ya tenemos todas las piezas del rompecabezas
+                    if (partsRead === totalParts) {
+                        if (html5QrcodeScanner) html5QrcodeScanner.pause(true); 
+                        progress.innerText = "¡Procesando datos...";
+                        
+                        const fullCompressedText = scannedChunks.join(""); // Unimos todo en orden
+                        const decompressedText = LZString.decompressFromEncodedURIComponent(fullCompressedText);
+                        
+                        processDecodedData(decompressedText);
+                    }
                 }
-                
-                document.getElementById("roundSelect").value = currentRound;
-                renderPairings();
-                syncToCloud();
-                
-                document.getElementById("modalQR").classList.add("hidden");
-                if (html5QrcodeScanner) html5QrcodeScanner.clear();
             } else {
-                alert("Formato de QR no reconocido.");
+                // Retrocompatibilidad (Por si escaneamos un QR viejo sin dividir)
+                const decompressedText = LZString.decompressFromEncodedURIComponent(decodedText) || decodedText;
+                if (decompressedText.includes("|")) {
+                    processDecodedData(decompressedText);
+                }
             }
         } catch (error) {
-            console.error("Error al leer QR", error);
-            alert("Error al procesar el código QR.");
+            console.error("Error al procesar QR fragmentado", error);
         }
     });
 }
 
+function processDecodedData(decompressedText) {
+    if (decompressedText && decompressedText.includes("|")) {
+        const parts = decompressedText.split("|");
+        const mode = parts[0]; 
+        currentRound = parseInt(parts[1]);
+        const mesas = parts[2].split(";");
+        
+        if (mode === "E") {
+            pairings = mesas.map(mesaStr => {
+                const [board, snoW, snoB, white, black] = mesaStr.split(",");
+                return {
+                    board: parseInt(board), snoW: snoW, snoB: snoB,
+                    white: white, black: black, result: "",
+                    illegalW: 0, illegalB: 0, timeStart: new Date().toLocaleTimeString(), timeEnd: null
+                };
+            });
+            alert("¡Emparejamientos sincronizados correctamente!");
+        } else if (mode === "R") {
+            mesas.forEach(mesaStr => {
+                const [boardStr, resultStr, illWStr, illBStr] = mesaStr.split(",");
+                const p = pairings.find(x => x.board === parseInt(boardStr));
+                if (p) {
+                    p.result = resultStr === "X" ? "" : resultStr;
+                    p.illegalW = parseInt(illWStr); p.illegalB = parseInt(illBStr);
+                    if (p.result && !p.timeEnd) p.timeEnd = new Date().toLocaleTimeString();
+                }
+            });
+            alert("¡Resultados sincronizados correctamente!");
+        }
+        
+        document.getElementById("roundSelect").value = currentRound;
+        renderPairings();
+        syncToCloud();
+        closeQRModal();
+    } else {
+        alert("Datos corruptos o no reconocidos.");
+        closeQRModal();
+    }
+}
+
 function closeQRModal() {
+    clearInterval(qrInterval); // Apagamos el carrusel al cerrar la ventana
     if (html5QrcodeScanner) {
-        html5QrcodeScanner.clear();
+        try { html5QrcodeScanner.clear(); } catch(e) {}
         html5QrcodeScanner = null;
     }
     document.getElementById("modalQR").classList.add("hidden");
