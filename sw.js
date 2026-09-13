@@ -1,4 +1,4 @@
-const CACHE_NAME = "swisscompanion-v7";
+const CACHE_NAME = "swisscompanion-v8";
 
 // Usamos "./" en lugar de "/" para que sea compatible con GitHub Pages
 const urlsToCache = [
