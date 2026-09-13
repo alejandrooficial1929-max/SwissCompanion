@@ -118,7 +118,21 @@
         <div class="modal-content">
             <span class="close-modal-qr">&times;</span>
             <h3 id="qrModalTitle">Sincronización QR</h3>
-            <div id="qrContainer"></div>
+                
+                <!-- Panel de opciones para sincronización -->
+                <div id="qrOptions" class="hidden" style="margin: 15px 0; background: var(--bg-main); padding: 12px; border-radius: 8px; font-size: 0.9rem; border: 1px solid var(--border);">
+                    <p style="margin: 0 0 10px 0; color: var(--accent); font-weight: bold;">¿Qué deseas transmitir?</p>
+                    <label style="display: block; margin-bottom: 12px; cursor: pointer;">
+                        <input type="radio" name="qrMode" value="E" onchange="generateQR()" checked> 
+                        Emparejamientos (PC ➡️ Celular)
+                    </label>
+                    <label style="display: block; cursor: pointer;">
+                        <input type="radio" name="qrMode" value="R" onchange="generateQR()"> 
+                        Resultados (Celular ➡️ PC)
+                    </label>
+                </div>
+
+                <div id="qrContainer" style="text-align: center; margin-top: 20px;"></div>
             <div id="qrReader" style="width: 100%; display: none;"></div>
         </div>
     </div>
