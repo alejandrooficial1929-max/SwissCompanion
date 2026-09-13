@@ -339,27 +339,39 @@ function generateQR() {
     const modal = document.getElementById("modalQR");
     const container = document.getElementById("qrContainer");
     const reader = document.getElementById("qrReader");
+    const qrOptions = document.getElementById("qrOptions");
     
-    document.getElementById("qrModalTitle").innerText = "Código QR de Resultados";
+    document.getElementById("qrModalTitle").innerText = "Generar Código QR";
     container.innerHTML = "";
     container.style.display = "block";
     reader.style.display = "none";
+    if(qrOptions) qrOptions.classList.remove("hidden"); // Mostrar las opciones
     
-    // Formato Ultra-Compacto: Solo enviamos Mesa, Resultado e Ilegales
-    // Ejemplo: 1|1,1-0,0,0;2,X,1,0
-    const compactData = pairings.map(p => {
-        let r = p.result || "X"; // X significa que no hay resultado aún
-        return `${p.board},${r},${p.illegalW || 0},${p.illegalB || 0}`;
-    }).join(";");
+    // Ver qué opción eligió el usuario (Emparejamientos o Resultados)
+    const mode = document.querySelector('input[name="qrMode"]:checked').value;
+    let dataString = "";
 
-    const dataString = `${currentRound}|${compactData}`;
-    
+    if (mode === "E") {
+        // Modo Emparejamiento (Envía: Mesa, SNo, Nombres)
+        const compactData = pairings.map(p => `${p.board},${p.snoW || 0},${p.snoB || 0},${p.white},${p.black}`).join(";");
+        dataString = `E|${currentRound}|${compactData}`;
+    } else {
+        // Modo Resultados (Envía: Mesa, Resultados, Ilegales)
+        const compactData = pairings.map(p => {
+            let r = p.result || "X";
+            return `${p.board},${r},${p.illegalW || 0},${p.illegalB || 0}`;
+        }).join(";");
+        dataString = `R|${currentRound}|${compactData}`;
+    }
+
+    // Generar QR (correctLevel 'L' hace que los cuadritos sean más grandes y fáciles de leer)
     new QRCode(container, {
         text: dataString,
         width: 256,
-        height: 256
+        height: 256,
+        correctLevel : QRCode.CorrectLevel.L 
     });
-
+    
     modal.classList.remove("hidden");
 }
 
@@ -367,42 +379,64 @@ function startQRScanner() {
     const modal = document.getElementById("modalQR");
     const container = document.getElementById("qrContainer");
     const reader = document.getElementById("qrReader");
+    const qrOptions = document.getElementById("qrOptions");
     
     document.getElementById("qrModalTitle").innerText = "Escanear Código QR";
     container.style.display = "none";
     reader.style.display = "block";
+    if(qrOptions) qrOptions.classList.add("hidden"); // Ocultamos los botones al escanear
+    
     modal.classList.remove("hidden");
-
+    
     html5QrcodeScanner = new Html5QrcodeScanner("qrReader", { fps: 10, qrbox: 250 });
     html5QrcodeScanner.render((decodedText) => {
         try {
-            // Verificamos que sea nuestro formato ultra-compacto (Ej: "1|1,1-0,0,0")
             if (decodedText.includes("|")) {
                 const parts = decodedText.split("|");
-                currentRound = parseInt(parts[0]);
+                const mode = parts[0]; // Sabremos si es 'E' (Emparejamientos) o 'R' (Resultados)
+                currentRound = parseInt(parts[1]);
                 
-                const mesas = parts[1].split(";");
-                mesas.forEach(mesaStr => {
-                    const [boardStr, resultStr, illWStr, illBStr] = mesaStr.split(",");
-                    const boardNum = parseInt(boardStr);
-                    
-                    // Buscamos la mesa correspondiente que ya debe estar cargada
-                    const p = pairings.find(x => x.board === boardNum);
-                    if (p) {
-                        p.result = resultStr === "X" ? "" : resultStr;
-                        p.illegalW = parseInt(illWStr);
-                        p.illegalB = parseInt(illBStr);
-                        if (p.result) {
-                            p.timeEnd = new Date().toLocaleTimeString();
+                const mesas = parts[2].split(";");
+                
+                if (mode === "E") {
+                    // Cargar Emparejamientos (PC ➡️ Celular)
+                    pairings = mesas.map(mesaStr => {
+                        const [board, snoW, snoB, white, black] = mesaStr.split(",");
+                        return {
+                            board: parseInt(board),
+                            snoW: snoW,
+                            snoB: snoB,
+                            white: white,
+                            black: black,
+                            result: "",
+                            illegalW: 0,
+                            illegalB: 0,
+                            timeStart: new Date().toLocaleTimeString(),
+                            timeEnd: null
+                        };
+                    });
+                    alert("¡Emparejamientos sincronizados correctamente!");
+                } else if (mode === "R") {
+                    // Actualizar Resultados (Celular ➡️ PC)
+                    mesas.forEach(mesaStr => {
+                        const [boardStr, resultStr, illWStr, illBStr] = mesaStr.split(",");
+                        const boardNum = parseInt(boardStr);
+                        const p = pairings.find(x => x.board === boardNum);
+                        if (p) {
+                            p.result = resultStr === "X" ? "" : resultStr;
+                            p.illegalW = parseInt(illWStr);
+                            p.illegalB = parseInt(illBStr);
+                            if (p.result && !p.timeEnd) {
+                                p.timeEnd = new Date().toLocaleTimeString();
+                            }
                         }
-                    }
-                });
-
+                    });
+                    alert("¡Resultados sincronizados correctamente!");
+                }
+                
                 document.getElementById("roundSelect").value = currentRound;
                 renderPairings();
                 syncToCloud();
-                
-                alert("¡Resultados sincronizados correctamente!");
                 
                 document.getElementById("modalQR").classList.add("hidden");
                 if (html5QrcodeScanner) html5QrcodeScanner.clear();
