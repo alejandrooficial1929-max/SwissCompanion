@@ -352,8 +352,12 @@ function generateQR() {
     let dataString = "";
 
     if (mode === "E") {
-        // Modo Emparejamiento (Envía: Mesa, SNo, Nombres)
-        const compactData = pairings.map(p => `${p.board},${p.snoW || 0},${p.snoB || 0},${p.white},${p.black}`).join(";");
+        // NOMBRES COMPLETOS: Quitamos comas para no romper el formato, conservando los nombres reales
+        const compactData = pairings.map(p => {
+            const w = p.white ? p.white.replace(/,/g, '').trim() : "";
+            const b = p.black ? p.black.replace(/,/g, '').trim() : "";
+            return `${p.board},${p.snoW || 0},${p.snoB || 0},${w},${b}`;
+        }).join(";");
         dataString = `E|${currentRound}|${compactData}`;
     } else {
         // Modo Resultados (Envía: Mesa, Resultados, Ilegales)
@@ -364,12 +368,15 @@ function generateQR() {
         dataString = `R|${currentRound}|${compactData}`;
     }
 
-    // Generar QR (correctLevel 'L' hace que los cuadritos sean más grandes y fáciles de leer)
+    // MAGIA: Comprimir los datos como un archivo ZIP ultraligero
+    const compressedData = LZString.compressToEncodedURIComponent(dataString);
+
+    // Generar QR con la información comprimida
     new QRCode(container, {
-        text: dataString,
-        width: 256,
-        height: 256,
-        correctLevel : QRCode.CorrectLevel.L 
+        text: compressedData,
+        width: 320,
+        height: 320,
+        correctLevel : QRCode.CorrectLevel.M
     });
     
     modal.classList.remove("hidden");
@@ -391,8 +398,11 @@ function startQRScanner() {
     html5QrcodeScanner = new Html5QrcodeScanner("qrReader", { fps: 10, qrbox: 250 });
     html5QrcodeScanner.render((decodedText) => {
         try {
-            if (decodedText.includes("|")) {
-                const parts = decodedText.split("|");
+            // DESCOMPRIMIR: Restauramos los datos gigantes a partir del texto comprimido
+            const decompressedText = LZString.decompressFromEncodedURIComponent(decodedText) || decodedText;
+
+            if (decompressedText.includes("|")) {
+                const parts = decompressedText.split("|");
                 const mode = parts[0]; // Sabremos si es 'E' (Emparejamientos) o 'R' (Resultados)
                 currentRound = parseInt(parts[1]);
                 
