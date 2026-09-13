@@ -528,3 +528,20 @@ button:hover, .btn-import:hover {
         text-align: center;
     }
 }
+
+/* Marco blanco forzado para que el escáner reconozca el QR (Quiet Zone) */
+#qrContainer {
+    background-color: #ffffff;
+    padding: 20px;
+    border-radius: 8px;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    margin: 15px auto;
+    width: fit-content;
+}
+
+#qrContainer img, #qrContainer canvas {
+    display: block !important;
+    margin: 0 auto;
+}
