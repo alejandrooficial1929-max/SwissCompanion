@@ -529,25 +529,25 @@ button:hover, .btn-import:hover {
     }
 }
 
-/* Marco blanco forzado para que el escáner reconozca el QR */
+/* Marco blanco forzado y contenedor estricto 1:1 */
 #qrContainer {
     background-color: #ffffff;
-    padding: 15px;
+    padding: 10px;
     border-radius: 8px;
     display: flex;
     justify-content: center;
     align-items: center;
     margin: 15px auto;
-    width: fit-content;
+    width: 100%;
+    max-width: 300px;
+    aspect-ratio: 1 / 1;
+    overflow: hidden;
 }
 
-/* Mantenemos la relación de aspecto 1:1 (cuadrada) sin forzar alturas fijas que lo deformen */
 #qrContainer img, #qrContainer canvas {
-    display: block !important;
     width: 100% !important;
-    max-width: 320px !important;
-    height: auto !important;
-    aspect-ratio: 1 / 1;
-    object-fit: contain;
+    height: 100% !important;
+    object-fit: contain !important;
+    display: block !important;
     margin: 0 auto;
 }
